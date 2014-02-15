@@ -40,12 +40,15 @@ def list_columns(url, params, param_to_test):
     # print req.content
     if ('not found; SQL statement' in req.content):
         # pattern for the columns
+        # TODO: replace with this regex (([a-zA-Z0-9_-]+_)\.([a-zA-Z0-9_-]+)\s)
         pattern = re.compile(r'(_\.[a-zA-Z0-9_-]+\s)')
         for column_name in re.findall(pattern, req.content):
             column_name = column_name[2:-1]
-            columns.append(column_name)
+            if (column_name not in columns):
+                columns.append(column_name)
+                print "[!] Column found : " + column_name
 
-            print "[!] Column found : " + column_name
+            
     else:
         raise Exception('We cannot manage to retrieve columns.')
     
