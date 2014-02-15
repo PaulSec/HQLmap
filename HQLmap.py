@@ -9,6 +9,7 @@ import re
 
 COOKIE = ""
 TABLES = {}
+VERBOSE_MODE = False
 
 def send_HTTP_request(url, params):
     global COOKIE
@@ -63,12 +64,16 @@ def list_columns(url, params, param_to_test):
 def enumerate_tables_and_columns():
     global TABLES
 
-    print "[!] Enumerating extracted information"
+    display_message("[-] Enumerating extracted information")
     for table in TABLES:
         print "[" + table + "]"
         for column in TABLES[table]:
             print "\t" + column
 
+def display_message(message):
+    global VERBOSE_MODE
+    if (VERBOSE_MODE):
+        print message
 
 # option parser
 parser = optparse.OptionParser()
@@ -86,7 +91,9 @@ if (len(sys.argv) <= 2):
     parser.print_help()
 else:
     (opts, args) = parser.parse_args()
+    # Setting cookie and verbose mode
     COOKIE = opts.cookie
+    VERBOSE_MODE = opts.verbose
 
     # check for param
     params = parse_qs(urlparse(opts.url).query)
