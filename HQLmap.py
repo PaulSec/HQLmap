@@ -104,7 +104,6 @@ def find_column(url, params, param_to_test, table, column_name):
         find_table(url, params, param_to_test, table)
         if (table not in TABLES):
             raise Exception('Table ' + table + ' does not exist ?')
-            return
 
     params[param_to_test] = "'and (select count(w." + column_name + ") from " + table + " w) >= 0 or ''='"
     
