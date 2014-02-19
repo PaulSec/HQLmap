@@ -282,12 +282,12 @@ parser.add_option('--message', help='Message appearing while Blind HQLi', dest='
 # Table options
 parser.add_option('--tables', help='Tries to gather as much tables as possible (With Bruteforce)', dest='tables', default=False, action='store_true')
 parser.add_option('--T', help='Name of the table you want to get', dest='table', default=None)
-parser.add_option('--table_name_file', help='Name for tables', dest='file_table', default='db/tables.db')
+parser.add_option('--table_name_file', help='DB file for name of tables', dest='file_table', default='db/tables.db')
 
 # Column options
 parser.add_option('--columns', help='Tries to gather as much columns as possible (With Bruteforce)', dest='columns', default=False, action='store_true')
 parser.add_option('--C', help='Name of the column you want to get', dest='column', default=None)
-parser.add_option('--column_name_file', help='Name for columns', dest='file_column', default='db/columns.db')
+parser.add_option('--column_name_file', help='DB file for name of columns', dest='file_column', default='db/columns.db')
 
 # Fingerprinting flag
 parser.add_option('--check', help='Check if host is vulnerable', dest='check', default=False, action='store_true')
