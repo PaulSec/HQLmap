@@ -112,7 +112,7 @@ def find_column(url, params, param_to_test, table, column_name):
     if (column_exists(req.content)):
         insert_column_in_table(table, column_name)
     else:
-        print "[-] Column " + column_name + " does not exist." 
+        print "[-] Column " + column_name + " in " + table + " does not exist." 
 
 ###########################
 ### Username
@@ -275,8 +275,8 @@ def display_message(message):
 # option parser
 parser = optparse.OptionParser()
 parser.add_option('--url', help='qURL to pentest', dest='url')
-parser.add_option('--param', help='Param to test', dest='param')
 parser.add_option('--cookie', help='Cookie to test it', dest='cookie', default=None)
+parser.add_option('--param', help='Param to test', dest='param')
 parser.add_option('--message', help='Message appearing while Blind HQLi', dest='blind_hqli_message', default=None)
 
 # Table options
@@ -316,9 +316,6 @@ else:
     url = opts.url.split('?')[0]
     check_if_host_vulnerable(url, params, opts.param)
 
-    # list columns
-    list_columns(url, params, opts.param)
-
     # --tables flag
     if (opts.tables):
         display_message("Trying to gather as much tables..")
@@ -345,7 +342,6 @@ else:
         if (opts.tables):
             display_message("Trying to find column " + opts.column + " for all tables")
             for table in TABLES:
-                print table
                 find_column(url, params, opts.param, table, opts.column)
         elif(opts.table is not None):
             display_message("Trying to find column " + opts.column + " for table " + opts.table)
@@ -368,4 +364,6 @@ else:
 
     # enumerate tables and columns found if flag passed
     if (opts.results):
+        # list columns
+        list_columns(url, params, opts.param)
         enumerate_tables_and_columns()
