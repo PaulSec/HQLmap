@@ -26,9 +26,10 @@ def send_HTTP_request(url, params):
     url = url + '?' + urllib.urlencode(params)
     display_message("URL : " + url)
 
-    if (params['postdata'] is not None):
-        postdata = urllib.urlencode(params['postdata'])
-        del params['postdata']
+    params_copy = params.copy()
+    if ('postdata' in params_copy and params_copy['postdata'] is not None):
+        postdata = urllib.urlencode(params_copy['postdata'])
+        del params_copy['postdata']
         req = requests.post(url, headers=headers, data=postdata)
     else:
         req = requests.get(url, headers=headers)
@@ -363,7 +364,7 @@ else:
     params['postdata'] = None
     if (opts.postdata is not None):
         params['postdata'] = dict( (k, v if len(v)>1 else v[0] ) 
-               for k, v in urlparse.parse_qs(params).iteritems() )
+               for k, v in urlparse.parse_qs(opts.postdata).iteritems() )
 
     if (opts.param not in params):
         raise Exception('Param not in URL!')
