@@ -12,16 +12,26 @@ COOKIE = ""
 TABLES = {}
 USER = ""
 VERBOSE_MODE = False
+USER_AGENT = ""
+REFERER = ""
 
 def send_HTTP_request(url, params):
     global COOKIE
+    global USER_AGENT
+    global REFERER
 
     # Create HTTP headers
-    headers = {'cookie': COOKIE}
+    headers = {'Cookie': COOKIE, 'Referer': REFERER, 'User-Agent': USER_AGENT}
 
     url = url + '?' + urllib.urlencode(params)
     display_message("URL : " + url)
-    req = requests.get(url, headers=headers)
+
+    if (params['postdata'] is not None):
+        postdata = urllib.urlencode(params['postdata'])
+        del params['postdata']
+        req = requests.post(url, headers=headers, data=postdata)
+    else:
+        req = requests.get(url, headers=headers)
     return req
 
 ###########################
@@ -294,8 +304,11 @@ def get_result_from_dump(content):
 # option parser
 parser = optparse.OptionParser()
 parser.add_option('--url', help='qURL to pentest', dest='url')
-parser.add_option('--cookie', help='Cookie to test it', dest='cookie', default=None)
+parser.add_option('--cookie', help='Cookie to test it', dest='cookie', default="")
+parser.add_option('--user_agent', help='Set the user agent', dest='user_agent', default="HQLmap v0.1")
+parser.add_option('--referer', help='Set the referer', dest='referer', default="")
 parser.add_option('--param', help='Param to test', dest='param')
+parser.add_option('--postdata', help='Postdata (POST Method)', dest='postdata', default=None)
 parser.add_option('--message', help='Message appearing while Blind HQLi', dest='blind_hqli_message', default=None)
 
 # Table options
@@ -327,11 +340,18 @@ else:
     # Setting cookie and verbose mode
     COOKIE = opts.cookie
     VERBOSE_MODE = opts.verbose
+    USER_AGENT = opts.user_agent
+    REFERER = opts.referer
 
     # check for param
     params = opts.url.split('?')[1]
     params = dict( (k, v if len(v)>1 else v[0] ) 
            for k, v in urlparse.parse_qs(params).iteritems() )
+
+    params['postdata'] = None
+    if (opts.postdata is not None):
+        params['postdata'] = dict( (k, v if len(v)>1 else v[0] ) 
+               for k, v in urlparse.parse_qs(params).iteritems() )
 
     if (opts.param not in params):
         raise Exception('Param not in URL!')
