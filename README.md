@@ -3,6 +3,7 @@ HQLMap
 
 This project has been created to exploit HQL Injections. 
 The tool has been written in Python and is released under MIT License. 
+Future development : I have in mind to develop specific module for SQLmap. 
 
 ### Where can you try the tool ? 
 
@@ -44,6 +45,7 @@ Options:
   --url=URL             qURL to pentest
   --cookie=COOKIE       Cookie to test it
   --param=PARAM         Param to test
+  --postdata=POSTDATA   Postdata (POST Method)  
   --message=BLIND_HQLI_MESSAGE
                         Message appearing while Blind HQLi
   --tables              Tries to gather as much tables as possible (With
@@ -78,6 +80,13 @@ The output is really simple :
 ```
 Host seems vulnerable.
 ```
+
+### Checking with POSTDATA
+
+```
+python HQLmap.py --url="http://localhost:9110/ropeytasks/task/search?q=test&search=Search" --param=q --cookie="JSESSIONID=A101D5D76A260E9ECD2E10ADE9DF0E47" --T=User --results --dump --postdata="username=Test&password=Test!!!"
+```
+
 
 ### Enumerating tables
 
