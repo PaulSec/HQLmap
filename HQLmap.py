@@ -1,4 +1,3 @@
-import urlparse
 import urllib
 import optparse
 import requests
@@ -22,17 +21,40 @@ def send_HTTP_request(url, params):
     # Create HTTP headers
     headers = {'Cookie': COOKIE, 'Referer': REFERER, 'User-Agent': USER_AGENT}
 
-    url = url + '?' + urllib.urlencode(params)
-    display_message("URL : " + url)
-
+    # Check that there's POST data
     params_copy = params.copy()
+    postdata = False
     if ('postdata' in params_copy and params_copy['postdata'] is not None):
         postdata = urllib.urlencode(params_copy['postdata'])
         del params_copy['postdata']
-        req = requests.post(url, headers=headers, data=postdata)
-    else:
+
+    # Create the url and encode (present) params if necessary
+    if (params_copy != {}):
+        url = url + '?' + urllib.urlencode(params_copy)
+
+    display_message("URL : " + url)
+
+    if (postdata is False):
         req = requests.get(url, headers=headers)
+    else:
+        headers["Content-Type"] = "application/x-www-form-urlencoded; charset=UTF-8"
+        display_message("POSTDATA : " + postdata)
+        req = requests.post(url, headers=headers, data=postdata)
+
     return req
+
+
+###########################
+### HTML function
+###########################
+
+def extract_params(var):
+    params = {}
+    pairs = var.split('&')
+    for pair in pairs:
+        key, value = pair.split('=')[0], pair.split('=')[1]
+        params[key] = value
+    return params
 
 ###########################
 ### Checker (exists ?) function
@@ -372,19 +394,29 @@ else:
     REFERER = opts.referer
 
     # check for GET params
-    params = opts.url.split('?')[1]
-    params = dict((k, v if len(v) > 1 else v[0]) for k, v in urlparse.parse_qs(params).iteritems())
+    params = {}
+    try:
+        params = opts.url.split('?')[1]
+        #params = dict((k, v if len(v) > 1 else v[0]) for k, v in urlparse.parse_qs(params).iteritems())
+        params = extract_params(params)
+        display_message("GET parameters are present. %s" % params)
+    except:
+        display_message("No GET Parameters")
+        pass
 
     # check for POST params
     params['postdata'] = None
     if (opts.postdata is not None):
-        params['postdata'] = dict((k, v if len(v) > 1 else v[0]) for k, v in urlparse.parse_qs(opts.postdata).iteritems())
+        #params['postdata'] = dict((k, v if len(v) > 1 else v[0]) for k, v in urlparse.parse_qs(opts.postdata).iteritems())
+        params['postdata'] = extract_params(opts.postdata)
+        display_message("POST parameters are present. %s" % params['postdata'])
     else:
         # if no POST params, delete the entry
+        display_message("No POST parameters.")
         del params['postdata']
 
-    if (opts.param not in params):
-        raise Exception('Param not in URL!')
+    if (opts.param not in params and opts.param not in params['postdata']):
+        raise Exception('Param "%s" is not present in the request!' % opts.param)
 
     url = opts.url.split('?')[0]
 
