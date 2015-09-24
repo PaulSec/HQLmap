@@ -82,7 +82,6 @@ def table_exists(message):
         return True
 
 
-#def check_if_host_vulnerable(url, param_to_test):
 def check_if_host_vulnerable():
 
     print 'Checking if %s is vulnerable' % url
